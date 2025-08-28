@@ -33,10 +33,7 @@ Component({
     isResizing: false,
     dragStart: { x: 0, y: 0 },
     resizeHandle: '',
-    // 添加防抖相关数据
-    drawTimer: null,
-    lastDrawTime: 0,
-    // 添加触摸节流
+    // 触摸节流
     touchThrottle: null,
     lastTouchTime: 0
   },
@@ -167,23 +164,6 @@ Component({
       });
     },
 
-    // 防抖绘制函数
-    debouncedDraw() {
-      const now = Date.now();
-      if (now - this.data.lastDrawTime < 16) { // 60fps限制
-        if (this.data.drawTimer) {
-          clearTimeout(this.data.drawTimer);
-        }
-        this.data.drawTimer = setTimeout(() => {
-          this.drawCanvas();
-          this.setData({ lastDrawTime: Date.now() });
-        }, 16);
-      } else {
-        this.drawCanvas();
-        this.setData({ lastDrawTime: now });
-      }
-    },
-
     // 触摸节流函数
     throttleTouch(callback) {
       const now = Date.now();
@@ -244,12 +224,12 @@ Component({
           newX = Math.max(0, Math.min(newX, canvasWidth - cropBox.width));
           newY = Math.max(0, Math.min(newY, canvasHeight - cropBox.height));
           
-          // 直接更新数据，不触发重绘
+          // 直接更新数据
           this.data.cropBox.x = newX;
           this.data.cropBox.y = newY;
           
-          // 使用防抖绘制
-          this.debouncedDraw();
+          // 重新绘制整个画布
+          this.drawCanvas();
         });
       } else if (isResizing) {
         // 调整裁切框大小
@@ -285,11 +265,11 @@ Component({
           if (newCropBox.x >= 0 && newCropBox.y >= 0 && 
               newCropBox.x + newCropBox.width <= canvasWidth &&
               newCropBox.y + newCropBox.height <= canvasHeight) {
-            // 直接更新数据，不触发重绘
+            // 直接更新数据
             this.data.cropBox = newCropBox;
             
-            // 使用防抖绘制
-            this.debouncedDraw();
+            // 重新绘制整个画布
+            this.drawCanvas();
           }
         });
       }
@@ -297,22 +277,13 @@ Component({
 
     // 触摸结束
     onTouchEnd() {
-      // 触摸结束后立即更新UI状态
+      // 触摸结束后更新UI状态
       this.setData({
         isDragging: false,
         isResizing: false,
         resizeHandle: '',
         cropBox: this.data.cropBox
       });
-      
-      // 清除定时器
-      if (this.data.drawTimer) {
-        clearTimeout(this.data.drawTimer);
-        this.data.drawTimer = null;
-      }
-      
-      // 最终绘制一次，确保UI同步
-      this.drawCanvas();
     },
 
     // 确认裁切
@@ -374,12 +345,6 @@ Component({
 
     // 关闭组件
     close() {
-      // 清除定时器
-      if (this.data.drawTimer) {
-        clearTimeout(this.data.drawTimer);
-        this.data.drawTimer = null;
-      }
-      
       this.setData({
         show: false,
         imageSrc: '',
