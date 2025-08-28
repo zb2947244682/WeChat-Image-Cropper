@@ -32,7 +32,13 @@ Component({
     isDragging: false,
     isResizing: false,
     dragStart: { x: 0, y: 0 },
-    resizeHandle: ''
+    resizeHandle: '',
+    // 添加防抖相关数据
+    drawTimer: null,
+    lastDrawTime: 0,
+    // 添加触摸节流
+    touchThrottle: null,
+    lastTouchTime: 0
   },
 
   methods: {
@@ -91,6 +97,8 @@ Component({
     drawCanvas() {
       const query = this.createSelectorQuery();
       query.select('#cropperCanvas').fields({ node: true, size: true }).exec((res) => {
+        if (!res[0] || !res[0].node) return;
+        
         const canvas = res[0].node;
         const ctx = canvas.getContext('2d');
         
@@ -159,6 +167,32 @@ Component({
       });
     },
 
+    // 防抖绘制函数
+    debouncedDraw() {
+      const now = Date.now();
+      if (now - this.data.lastDrawTime < 16) { // 60fps限制
+        if (this.data.drawTimer) {
+          clearTimeout(this.data.drawTimer);
+        }
+        this.data.drawTimer = setTimeout(() => {
+          this.drawCanvas();
+          this.setData({ lastDrawTime: Date.now() });
+        }, 16);
+      } else {
+        this.drawCanvas();
+        this.setData({ lastDrawTime: now });
+      }
+    },
+
+    // 触摸节流函数
+    throttleTouch(callback) {
+      const now = Date.now();
+      if (now - this.data.lastTouchTime > 8) { // 120fps触摸响应
+        callback();
+        this.setData({ lastTouchTime: now });
+      }
+    },
+
     // 触摸开始
     onTouchStart(e) {
       const touch = e.touches[0];
@@ -202,65 +236,83 @@ Component({
       
       if (isDragging) {
         // 移动裁切框
-        let newX = touch.x - dragStart.x;
-        let newY = touch.y - dragStart.y;
-        
-        // 边界检查
-        newX = Math.max(0, Math.min(newX, canvasWidth - cropBox.width));
-        newY = Math.max(0, Math.min(newY, canvasHeight - cropBox.height));
-        
-        this.setData({
-          'cropBox.x': newX,
-          'cropBox.y': newY
+        this.throttleTouch(() => {
+          let newX = touch.x - dragStart.x;
+          let newY = touch.y - dragStart.y;
+          
+          // 边界检查
+          newX = Math.max(0, Math.min(newX, canvasWidth - cropBox.width));
+          newY = Math.max(0, Math.min(newY, canvasHeight - cropBox.height));
+          
+          // 直接更新数据，不触发重绘
+          this.data.cropBox.x = newX;
+          this.data.cropBox.y = newY;
+          
+          // 使用防抖绘制
+          this.debouncedDraw();
         });
-        
-        this.drawCanvas();
       } else if (isResizing) {
         // 调整裁切框大小
-        const deltaX = touch.x - dragStart.x;
-        const deltaY = touch.y - dragStart.y;
-        let newCropBox = { ...cropBox };
-        
-        switch (this.data.resizeHandle) {
-          case 'tl':
-            newCropBox.width = Math.max(minSize, cropBox.width - deltaX);
-            newCropBox.height = Math.max(minSize, cropBox.height - deltaY);
-            newCropBox.x = cropBox.x + cropBox.width - newCropBox.width;
-            newCropBox.y = cropBox.y + cropBox.height - newCropBox.height;
-            break;
-          case 'tr':
-            newCropBox.width = Math.max(minSize, cropBox.width + deltaX);
-            newCropBox.height = Math.max(minSize, cropBox.height - deltaY);
-            newCropBox.y = cropBox.y + cropBox.height - newCropBox.height;
-            break;
-          case 'bl':
-            newCropBox.width = Math.max(minSize, cropBox.width - deltaX);
-            newCropBox.height = Math.max(minSize, cropBox.height + deltaY);
-            newCropBox.x = cropBox.x + cropBox.width - newCropBox.width;
-            break;
-          case 'br':
-            newCropBox.width = Math.max(minSize, cropBox.width + deltaX);
-            newCropBox.height = Math.max(minSize, cropBox.height + deltaY);
-            break;
-        }
-        
-        // 边界检查
-        if (newCropBox.x >= 0 && newCropBox.y >= 0 && 
-            newCropBox.x + newCropBox.width <= canvasWidth &&
-            newCropBox.y + newCropBox.height <= canvasHeight) {
-          this.setData({ cropBox: newCropBox });
-          this.drawCanvas();
-        }
+        this.throttleTouch(() => {
+          const deltaX = touch.x - dragStart.x;
+          const deltaY = touch.y - dragStart.y;
+          let newCropBox = { ...cropBox };
+          
+          switch (this.data.resizeHandle) {
+            case 'tl':
+              newCropBox.width = Math.max(minSize, cropBox.width - deltaX);
+              newCropBox.height = Math.max(minSize, cropBox.height - deltaY);
+              newCropBox.x = cropBox.x + cropBox.width - newCropBox.width;
+              newCropBox.y = cropBox.y + cropBox.height - newCropBox.height;
+              break;
+            case 'tr':
+              newCropBox.width = Math.max(minSize, cropBox.width + deltaX);
+              newCropBox.height = Math.max(minSize, cropBox.height - deltaY);
+              newCropBox.y = cropBox.y + cropBox.height - newCropBox.height;
+              break;
+            case 'bl':
+              newCropBox.width = Math.max(minSize, cropBox.width - deltaX);
+              newCropBox.height = Math.max(minSize, cropBox.height + deltaY);
+              newCropBox.x = cropBox.x + cropBox.width - newCropBox.width;
+              break;
+            case 'br':
+              newCropBox.width = Math.max(minSize, cropBox.width + deltaX);
+              newCropBox.height = Math.max(minSize, cropBox.height + deltaY);
+              break;
+          }
+          
+          // 边界检查
+          if (newCropBox.x >= 0 && newCropBox.y >= 0 && 
+              newCropBox.x + newCropBox.width <= canvasWidth &&
+              newCropBox.y + newCropBox.height <= canvasHeight) {
+            // 直接更新数据，不触发重绘
+            this.data.cropBox = newCropBox;
+            
+            // 使用防抖绘制
+            this.debouncedDraw();
+          }
+        });
       }
     },
 
     // 触摸结束
     onTouchEnd() {
+      // 触摸结束后立即更新UI状态
       this.setData({
         isDragging: false,
         isResizing: false,
-        resizeHandle: ''
+        resizeHandle: '',
+        cropBox: this.data.cropBox
       });
+      
+      // 清除定时器
+      if (this.data.drawTimer) {
+        clearTimeout(this.data.drawTimer);
+        this.data.drawTimer = null;
+      }
+      
+      // 最终绘制一次，确保UI同步
+      this.drawCanvas();
     },
 
     // 确认裁切
@@ -280,6 +332,8 @@ Component({
       // 创建临时canvas进行裁切
       const query = this.createSelectorQuery();
       query.select('#tempCanvas').fields({ node: true, size: true }).exec((res) => {
+        if (!res[0] || !res[0].node) return;
+        
         const canvas = res[0].node;
         const ctx = canvas.getContext('2d');
         
@@ -320,6 +374,12 @@ Component({
 
     // 关闭组件
     close() {
+      // 清除定时器
+      if (this.data.drawTimer) {
+        clearTimeout(this.data.drawTimer);
+        this.data.drawTimer = null;
+      }
+      
       this.setData({
         show: false,
         imageSrc: '',
