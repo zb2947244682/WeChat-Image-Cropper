@@ -57,19 +57,39 @@ Component({
       wx.getImageInfo({
         src: src,
         success: (res) => {
-          // 计算画布尺寸，限制最大尺寸
-          const maxWidth = 350;
-          const maxHeight = 400;
-          let { width, height } = res;
+          // 获取系统信息进行响应式计算
+          const systemInfo = wx.getSystemInfoSync();
+          const screenWidth = systemInfo.screenWidth;
+          const screenHeight = systemInfo.screenHeight;
           
-          if (width > maxWidth) {
-            height = height * maxWidth / width;
-            width = maxWidth;
+          // 计算最大可用尺寸（考虑padding和其他UI元素）
+          const maxWidth = Math.min(screenWidth * 0.8, 600);
+          const maxHeight = Math.min(screenHeight * 0.5, 500);
+          
+          let { width, height } = res;
+          const aspectRatio = width / height;
+          
+          // 按比例缩放，保持宽高比
+          if (width > height) {
+            width = Math.min(width, maxWidth);
+            height = width / aspectRatio;
+            if (height > maxHeight) {
+              height = maxHeight;
+              width = height * aspectRatio;
+            }
+          } else {
+            height = Math.min(height, maxHeight);
+            width = height * aspectRatio;
+            if (width > maxWidth) {
+              width = maxWidth;
+              height = width / aspectRatio;
+            }
           }
-          if (height > maxHeight) {
-            width = width * maxHeight / height;
-            height = maxHeight;
-          }
+
+          // 初始化裁切框（居中，占图片的60%）
+          const cropSize = Math.min(width, height) * 0.6;
+          const cropX = (width - cropSize) / 2;
+          const cropY = (height - cropSize) / 2;
 
           this.setData({
             imageSrc: src,
@@ -78,10 +98,10 @@ Component({
             canvasWidth: width,
             canvasHeight: height,
             cropBox: {
-              x: width * 0.15,
-              y: height * 0.15,
-              width: width * 0.7,
-              height: height * 0.7
+              x: cropX,
+              y: cropY,
+              width: cropSize,
+              height: cropSize
             }
           });
           
@@ -146,7 +166,7 @@ Component({
       ctx.clearRect(0, 0, canvasWidth, canvasHeight);
       
       // 绘制半透明遮罩
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
       ctx.fillRect(0, 0, canvasWidth, canvasHeight);
       
       // 清除裁切区域的遮罩
@@ -156,23 +176,55 @@ Component({
       // 重置混合模式
       ctx.globalCompositeOperation = 'source-over';
       
-      // 绘制裁切框边框
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2;
+      // 绘制裁切框边框（双线效果）
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
       ctx.strokeRect(cropBox.x, cropBox.y, cropBox.width, cropBox.height);
+      
+      ctx.strokeStyle = '#007aff';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cropBox.x + 1, cropBox.y + 1, cropBox.width - 2, cropBox.height - 2);
+      
+      // 绘制九宫格辅助线
+      this.drawGridLines(ctx);
       
       // 绘制角落控制点
       this.drawHandles(ctx);
     },
 
+    // 绘制九宫格辅助线
+    drawGridLines(ctx) {
+      const { cropBox } = this.data;
+      
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.lineWidth = 1;
+      
+      // 垂直线
+      const verticalStep = cropBox.width / 3;
+      for (let i = 1; i < 3; i++) {
+        const x = cropBox.x + verticalStep * i;
+        ctx.beginPath();
+        ctx.moveTo(x, cropBox.y);
+        ctx.lineTo(x, cropBox.y + cropBox.height);
+        ctx.stroke();
+      }
+      
+      // 水平线
+      const horizontalStep = cropBox.height / 3;
+      for (let i = 1; i < 3; i++) {
+        const y = cropBox.y + horizontalStep * i;
+        ctx.beginPath();
+        ctx.moveTo(cropBox.x, y);
+        ctx.lineTo(cropBox.x + cropBox.width, y);
+        ctx.stroke();
+      }
+    },
+
     // 绘制控制点
     drawHandles(ctx) {
       const { cropBox } = this.data;
-      const handleSize = 10;
-      
-      ctx.fillStyle = '#fff';
-      ctx.strokeStyle = '#007aff';
-      ctx.lineWidth = 2;
+      const handleSize = 16;
+      const innerSize = 8;
       
       // 四个角的控制点
       const handles = [
@@ -183,7 +235,18 @@ Component({
       ];
       
       handles.forEach(handle => {
+        // 外圈白色
+        ctx.fillStyle = '#ffffff';
         ctx.fillRect(handle.x, handle.y, handleSize, handleSize);
+        
+        // 内圈蓝色
+        ctx.fillStyle = '#007aff';
+        const innerOffset = (handleSize - innerSize) / 2;
+        ctx.fillRect(handle.x + innerOffset, handle.y + innerOffset, innerSize, innerSize);
+        
+        // 边框
+        ctx.strokeStyle = '#007aff';
+        ctx.lineWidth = 2;
         ctx.strokeRect(handle.x, handle.y, handleSize, handleSize);
       });
     },
@@ -191,7 +254,7 @@ Component({
     // 触摸节流函数
     throttleTouch(callback) {
       const now = Date.now();
-      if (now - this.data.lastTouchTime > 8) { // 120fps触摸响应
+      if (now - this.data.lastTouchTime > 16) { // 60fps触摸响应，更流畅
         callback();
         this.setData({ lastTouchTime: now });
       }
@@ -201,7 +264,8 @@ Component({
     onTouchStart(e) {
       const touch = e.touches[0];
       const { cropBox } = this.data;
-      const handleSize = 10;
+      const handleSize = 16;
+      const touchTolerance = 20; // 增加触摸容错范围
       
       // 检查是否点击了控制点
       const handles = [
@@ -212,8 +276,8 @@ Component({
       ];
       
       for (let handle of handles) {
-        if (Math.abs(touch.x - handle.x) <= handleSize && 
-            Math.abs(touch.y - handle.y) <= handleSize) {
+        if (Math.abs(touch.x - handle.x) <= touchTolerance && 
+            Math.abs(touch.y - handle.y) <= touchTolerance) {
           this.setData({
             isResizing: true,
             resizeHandle: handle.type,
