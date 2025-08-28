@@ -1,0 +1,32 @@
+<view class="image-cropper" wx:if="{{show}}">
+  <view class="cropper-container">
+    <view class="cropper-header">
+      <text class="title">裁切图片</text>
+    </view>
+    
+    <view class="cropper-content">
+      <view class="canvas-container" wx:if="{{imageSrc}}">
+        <canvas 
+          id="cropperCanvas" 
+          type="2d"
+          class="cropper-canvas"
+          style="width: {{canvasWidth}}px; height: {{canvasHeight}}px;"
+          bindtouchstart="onTouchStart"
+          bindtouchmove="onTouchMove"
+          bindtouchend="onTouchEnd"
+        ></canvas>
+      </view>
+      
+      <view class="select-image" wx:else>
+        <button class="select-btn" bindtap="chooseImage">选择图片</button>
+      </view>
+    </view>
+    
+    <view class="cropper-footer" wx:if="{{imageSrc}}">
+      <button class="btn cancel-btn" bindtap="cancel">取消</button>
+      <button class="btn confirm-btn" bindtap="confirmCrop">确认</button>
+    </view>
+  </view>
+  
+  <canvas id="tempCanvas" type="2d" class="temp-canvas"></canvas>
+</view>
