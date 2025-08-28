@@ -3,6 +3,7 @@ Page({
   data: {
     showCropper: false,
     croppedImage: '',
+    selectedImagePath: '', // 选择的图片路径
     // 裁切模式配置
     cropperConfig: {
       aspectRatio: 0, // 0为自由裁切，其他值为固定比例
@@ -10,48 +11,50 @@ Page({
     }
   },
 
-  // 打开图片裁切 - 自由裁切
+  // 直接选择图片并开始自由裁切
   openCropper() {
-    this.setData({
-      showCropper: true,
-      'cropperConfig.aspectRatio': 0,
-      'cropperConfig.fullscreen': false
-    });
+    this.chooseImageAndCrop(0, false);
   },
 
-  // 打开全屏自由裁切
+  // 直接选择图片并开始全屏自由裁切
   openFullscreenCropper() {
-    this.setData({
-      showCropper: true,
-      'cropperConfig.aspectRatio': 0,
-      'cropperConfig.fullscreen': true
-    });
+    this.chooseImageAndCrop(0, true);
   },
 
-  // 打开1:1比例裁切
+  // 直接选择图片并开始1:1比例裁切
   openSquareCropper() {
-    this.setData({
-      showCropper: true,
-      'cropperConfig.aspectRatio': 1,
-      'cropperConfig.fullscreen': false
-    });
+    this.chooseImageAndCrop(1, false);
   },
 
-  // 打开16:9比例裁切
+  // 直接选择图片并开始16:9比例裁切
   openWideCropper() {
-    this.setData({
-      showCropper: true,
-      'cropperConfig.aspectRatio': 16/9,
-      'cropperConfig.fullscreen': false
-    });
+    this.chooseImageAndCrop(16/9, false);
   },
 
-  // 打开4:3比例裁切
+  // 直接选择图片并开始4:3比例裁切
   openClassicCropper() {
-    this.setData({
-      showCropper: true,
-      'cropperConfig.aspectRatio': 4/3,
-      'cropperConfig.fullscreen': false
+    this.chooseImageAndCrop(4/3, false);
+  },
+
+  // 选择图片并开始裁切的通用方法
+  chooseImageAndCrop(aspectRatio, fullscreen) {
+    wx.chooseImage({
+      count: 1,
+      sizeType: ['original'],
+      sourceType: ['album', 'camera'],
+      success: (res) => {
+        // 选择成功后显示裁切组件
+        this.setData({
+          showCropper: true,
+          'cropperConfig.aspectRatio': aspectRatio,
+          'cropperConfig.fullscreen': fullscreen,
+          selectedImagePath: res.tempFilePaths[0]
+        });
+      },
+      fail: () => {
+        // 用户取消选择，不做任何操作
+        console.log('用户取消选择图片');
+      }
     });
   },
 

@@ -40,12 +40,13 @@
 </view>
 
 <!-- 图片裁切组件 -->
-<image-cropper 
-  show="{{showCropper}}"
-  min-size="{{100}}"
-  quality="{{0.8}}"
-  aspect-ratio="{{cropperConfig.aspectRatio}}"
-  fullscreen="{{cropperConfig.fullscreen}}"
-  bind:cropped="onCropped"
-  bind:cancel="onCropCancel"
-/>
+  <image-cropper 
+    show="{{showCropper}}"
+    min-size="{{100}}"
+    quality="{{0.8}}"
+    aspect-ratio="{{cropperConfig.aspectRatio}}"
+    fullscreen="{{cropperConfig.fullscreen}}"
+    image-path="{{selectedImagePath}}"
+    bind:cropped="onCropped"
+    bind:cancel="onCropCancel"
+  />

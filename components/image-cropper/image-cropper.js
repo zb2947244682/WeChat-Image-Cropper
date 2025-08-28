@@ -24,6 +24,11 @@ Component({
     fullscreen: {
       type: Boolean,
       value: false
+    },
+    // 图片路径
+    imagePath: {
+      type: String,
+      value: ''
     }
   },
 
@@ -45,9 +50,7 @@ Component({
     resizeHandle: '',
     // 触摸节流
     touchThrottle: null,
-    lastTouchTime: 0,
-    // 是否已自动选择图片
-    autoSelected: false
+    lastTouchTime: 0
   },
 
   // 组件生命周期
@@ -59,17 +62,16 @@ Component({
 
   // 监听属性变化
   observers: {
+    'imagePath': function(imagePath) {
+      if (imagePath) {
+        // 接收到图片路径时直接加载图片
+        this.loadImage(imagePath);
+      }
+    },
     'show': function(show) {
-      if (show && !this.data.autoSelected) {
-        // 显示组件时自动选择图片
-        this.setData({ autoSelected: true });
-        setTimeout(() => {
-          this.chooseImage();
-        }, 100);
-      } else if (!show) {
+      if (!show) {
         // 隐藏组件时重置状态
         this.setData({ 
-          autoSelected: false,
           imageSrc: '',
           isDragging: false,
           isResizing: false
@@ -79,22 +81,6 @@ Component({
   },
 
   methods: {
-    // 选择图片
-    chooseImage() {
-      wx.chooseImage({
-        count: 1,
-        sizeType: ['original'],
-        sourceType: ['album', 'camera'],
-        success: (res) => {
-          const tempFilePath = res.tempFilePaths[0];
-          this.loadImage(tempFilePath);
-        },
-        fail: () => {
-          // 用户取消选择图片时关闭组件
-          this.cancel();
-        }
-      });
-    },
 
     // 加载图片
     loadImage(src) {
