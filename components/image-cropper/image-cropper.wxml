@@ -6,10 +6,19 @@
     
     <view class="cropper-content">
       <view class="canvas-container" wx:if="{{imageSrc}}">
+        <!-- 图片Canvas（底层，只绘制一次） -->
         <canvas 
-          id="cropperCanvas" 
+          id="imageCanvas" 
           type="2d"
-          class="cropper-canvas"
+          class="image-canvas"
+          style="width: {{canvasWidth}}px; height: {{canvasHeight}}px;"
+        ></canvas>
+        
+        <!-- 遮罩Canvas（顶层，触摸时更新） -->
+        <canvas 
+          id="maskCanvas" 
+          type="2d"
+          class="mask-canvas"
           style="width: {{canvasWidth}}px; height: {{canvasHeight}}px;"
           bindtouchstart="onTouchStart"
           bindtouchmove="onTouchMove"

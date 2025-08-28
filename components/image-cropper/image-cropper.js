@@ -78,22 +78,30 @@ Component({
             canvasWidth: width,
             canvasHeight: height,
             cropBox: {
-              x: width * 0.1,
-              y: height * 0.1,
-              width: width * 0.6,
-              height: width * 0.6
+              x: width * 0.15,
+              y: height * 0.15,
+              width: width * 0.7,
+              height: height * 0.7
             }
           });
           
-          this.drawCanvas();
+          this.initCanvases();
         }
       });
     },
 
-    // 绘制画布
-    drawCanvas() {
+    // 初始化双Canvas
+    initCanvases() {
+      // 初始化图片Canvas
+      this.initImageCanvas();
+      // 初始化遮罩Canvas
+      this.initMaskCanvas();
+    },
+
+    // 初始化图片Canvas（只绘制一次）
+    initImageCanvas() {
       const query = this.createSelectorQuery();
-      query.select('#cropperCanvas').fields({ node: true, size: true }).exec((res) => {
+      query.select('#imageCanvas').fields({ node: true, size: true }).exec((res) => {
         if (!res[0] || !res[0].node) return;
         
         const canvas = res[0].node;
@@ -102,26 +110,42 @@ Component({
         canvas.width = this.data.canvasWidth;
         canvas.height = this.data.canvasHeight;
 
-        // 清空画布
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
         // 绘制图片
         if (this.data.imageSrc) {
           const img = canvas.createImage();
           img.onload = () => {
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            this.drawCropBox(ctx);
           };
           img.src = this.data.imageSrc;
         }
       });
     },
 
-    // 绘制裁切框
-    drawCropBox(ctx) {
+    // 初始化遮罩Canvas
+    initMaskCanvas() {
+      const query = this.createSelectorQuery();
+      query.select('#maskCanvas').fields({ node: true, size: true }).exec((res) => {
+        if (!res[0] || !res[0].node) return;
+        
+        const canvas = res[0].node;
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = this.data.canvasWidth;
+        canvas.height = this.data.canvasHeight;
+        
+        // 绘制遮罩和裁切框
+        this.drawMask(ctx);
+      });
+    },
+
+    // 绘制遮罩和裁切框
+    drawMask(ctx) {
       const { cropBox, canvasWidth, canvasHeight } = this.data;
       
-      // 绘制遮罩
+      // 清空遮罩Canvas
+      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+      
+      // 绘制半透明遮罩
       ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
       ctx.fillRect(0, 0, canvasWidth, canvasHeight);
       
@@ -228,8 +252,8 @@ Component({
           this.data.cropBox.x = newX;
           this.data.cropBox.y = newY;
           
-          // 重新绘制整个画布
-          this.drawCanvas();
+          // 只更新遮罩Canvas，不重绘图片
+          this.updateMaskCanvas();
         });
       } else if (isResizing) {
         // 调整裁切框大小
@@ -268,11 +292,25 @@ Component({
             // 直接更新数据
             this.data.cropBox = newCropBox;
             
-            // 重新绘制整个画布
-            this.drawCanvas();
+            // 只更新遮罩Canvas，不重绘图片
+            this.updateMaskCanvas();
           }
         });
       }
+    },
+
+    // 更新遮罩Canvas（轻量级操作）
+    updateMaskCanvas() {
+      const query = this.createSelectorQuery();
+      query.select('#maskCanvas').fields({ node: true, size: true }).exec((res) => {
+        if (!res[0] || !res[0].node) return;
+        
+        const canvas = res[0].node;
+        const ctx = canvas.getContext('2d');
+        
+        // 只重绘遮罩，不重绘图片
+        this.drawMask(ctx);
+      });
     },
 
     // 触摸结束
