@@ -14,6 +14,16 @@ Component({
     quality: {
       type: Number,
       value: 0.8
+    },
+    // 裁切比例 (宽/高)，不传则为自由裁切
+    aspectRatio: {
+      type: Number,
+      value: 0
+    },
+    // 是否全屏模式
+    fullscreen: {
+      type: Boolean,
+      value: false
     }
   },
 
@@ -35,7 +45,37 @@ Component({
     resizeHandle: '',
     // 触摸节流
     touchThrottle: null,
-    lastTouchTime: 0
+    lastTouchTime: 0,
+    // 是否已自动选择图片
+    autoSelected: false
+  },
+
+  // 组件生命周期
+  lifetimes: {
+    attached() {
+      // 组件初始化时的逻辑
+    }
+  },
+
+  // 监听属性变化
+  observers: {
+    'show': function(show) {
+      if (show && !this.data.autoSelected) {
+        // 显示组件时自动选择图片
+        this.setData({ autoSelected: true });
+        setTimeout(() => {
+          this.chooseImage();
+        }, 100);
+      } else if (!show) {
+        // 隐藏组件时重置状态
+        this.setData({ 
+          autoSelected: false,
+          imageSrc: '',
+          isDragging: false,
+          isResizing: false
+        });
+      }
+    }
   },
 
   methods: {
@@ -48,6 +88,10 @@ Component({
         success: (res) => {
           const tempFilePath = res.tempFilePaths[0];
           this.loadImage(tempFilePath);
+        },
+        fail: () => {
+          // 用户取消选择图片时关闭组件
+          this.cancel();
         }
       });
     },
@@ -62,47 +106,84 @@ Component({
           const screenWidth = systemInfo.screenWidth;
           const screenHeight = systemInfo.screenHeight;
           
-          // 计算最大可用尺寸（考虑padding和其他UI元素）
-          const maxWidth = Math.min(screenWidth * 0.8, 600);
-          const maxHeight = Math.min(screenHeight * 0.5, 500);
+          let canvasWidth, canvasHeight;
           
-          let { width, height } = res;
-          const aspectRatio = width / height;
-          
-          // 按比例缩放，保持宽高比
-          if (width > height) {
-            width = Math.min(width, maxWidth);
-            height = width / aspectRatio;
-            if (height > maxHeight) {
-              height = maxHeight;
-              width = height * aspectRatio;
-            }
+          if (this.properties.fullscreen) {
+            // 全屏模式：Canvas撑满整个屏幕
+            canvasWidth = screenWidth;
+            canvasHeight = screenHeight;
           } else {
-            height = Math.min(height, maxHeight);
-            width = height * aspectRatio;
-            if (width > maxWidth) {
-              width = maxWidth;
+            // 普通模式：计算最大可用尺寸（考虑padding和其他UI元素）
+            const maxWidth = Math.min(screenWidth * 0.8, 600);
+            const maxHeight = Math.min(screenHeight * 0.5, 500);
+            
+            let { width, height } = res;
+            const aspectRatio = width / height;
+            
+            // 按比例缩放，保持宽高比
+            if (width > height) {
+              width = Math.min(width, maxWidth);
               height = width / aspectRatio;
+              if (height > maxHeight) {
+                height = maxHeight;
+                width = height * aspectRatio;
+              }
+            } else {
+              height = Math.min(height, maxHeight);
+              width = height * aspectRatio;
+              if (width > maxWidth) {
+                width = maxWidth;
+                height = width / aspectRatio;
+              }
             }
+            
+            canvasWidth = width;
+            canvasHeight = height;
           }
 
-          // 初始化裁切框（居中，占图片的60%）
-          const cropSize = Math.min(width, height) * 0.6;
-          const cropX = (width - cropSize) / 2;
-          const cropY = (height - cropSize) / 2;
+          // 初始化裁切框
+          let cropBox;
+          if (this.properties.aspectRatio > 0) {
+            // 固定比例裁切
+            const aspectRatio = this.properties.aspectRatio;
+            let cropWidth, cropHeight;
+            
+            // 根据Canvas尺寸和比例计算裁切框大小
+            const canvasAspectRatio = canvasWidth / canvasHeight;
+            if (aspectRatio > canvasAspectRatio) {
+              // 裁切框较宽
+              cropWidth = canvasWidth * 0.8;
+              cropHeight = cropWidth / aspectRatio;
+            } else {
+              // 裁切框较高
+              cropHeight = canvasHeight * 0.8;
+              cropWidth = cropHeight * aspectRatio;
+            }
+            
+            cropBox = {
+              x: (canvasWidth - cropWidth) / 2,
+              y: (canvasHeight - cropHeight) / 2,
+              width: cropWidth,
+              height: cropHeight
+            };
+          } else {
+            // 自由裁切：正方形裁切框
+            const cropSize = Math.min(canvasWidth, canvasHeight) * 0.6;
+            cropBox = {
+              x: (canvasWidth - cropSize) / 2,
+              y: (canvasHeight - cropSize) / 2,
+              width: cropSize,
+              height: cropSize
+            };
+          }
 
           this.setData({
             imageSrc: src,
             imageWidth: res.width,
             imageHeight: res.height,
-            canvasWidth: width,
-            canvasHeight: height,
-            cropBox: {
-              x: cropX,
-              y: cropY,
-              width: cropSize,
-              height: cropSize
-            }
+            canvasWidth: canvasWidth,
+            canvasHeight: canvasHeight,
+            cropBox: cropBox
           });
           
           this.initCanvases();
@@ -223,8 +304,8 @@ Component({
     // 绘制控制点
     drawHandles(ctx) {
       const { cropBox } = this.data;
-      const handleSize = 16;
-      const innerSize = 8;
+      const handleSize = 20; // 增大控制点尺寸
+      const innerSize = 12;
       
       // 四个角的控制点
       const handles = [
@@ -235,9 +316,21 @@ Component({
       ];
       
       handles.forEach(handle => {
+        // 绘制阴影效果
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 1;
+        ctx.shadowOffsetY = 1;
+        
         // 外圈白色
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(handle.x, handle.y, handleSize, handleSize);
+        
+        // 清除阴影
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
         
         // 内圈蓝色
         ctx.fillStyle = '#007aff';
@@ -264,8 +357,8 @@ Component({
     onTouchStart(e) {
       const touch = e.touches[0];
       const { cropBox } = this.data;
-      const handleSize = 16;
-      const touchTolerance = 20; // 增加触摸容错范围
+      const handleSize = 20; // 与drawHandles中的尺寸保持一致
+      const touchTolerance = 30; // 进一步增加触摸容错范围
       
       // 检查是否点击了控制点
       const handles = [
@@ -275,16 +368,27 @@ Component({
         { type: 'br', x: cropBox.x + cropBox.width, y: cropBox.y + cropBox.height }
       ];
       
+      let hitHandle = null;
+      let minDistance = Infinity;
+      
+      // 找到最近的控制点
       for (let handle of handles) {
-        if (Math.abs(touch.x - handle.x) <= touchTolerance && 
-            Math.abs(touch.y - handle.y) <= touchTolerance) {
-          this.setData({
-            isResizing: true,
-            resizeHandle: handle.type,
-            dragStart: { x: touch.x, y: touch.y }
-          });
-          return;
+        const distance = Math.sqrt(
+          Math.pow(touch.x - handle.x, 2) + Math.pow(touch.y - handle.y, 2)
+        );
+        if (distance <= touchTolerance && distance < minDistance) {
+          hitHandle = handle.type;
+          minDistance = distance;
         }
+      }
+      
+      if (hitHandle) {
+        this.setData({
+          isResizing: true,
+          resizeHandle: hitHandle,
+          dragStart: { x: touch.x, y: touch.y }
+        });
+        return;
       }
       
       // 检查是否点击了裁切框内部
@@ -325,40 +429,113 @@ Component({
           const deltaX = touch.x - dragStart.x;
           const deltaY = touch.y - dragStart.y;
           let newCropBox = { ...cropBox };
+          const aspectRatio = this.properties.aspectRatio;
           
-          switch (this.data.resizeHandle) {
-            case 'tl':
-              newCropBox.width = Math.max(minSize, cropBox.width - deltaX);
-              newCropBox.height = Math.max(minSize, cropBox.height - deltaY);
-              newCropBox.x = cropBox.x + cropBox.width - newCropBox.width;
-              newCropBox.y = cropBox.y + cropBox.height - newCropBox.height;
-              break;
-            case 'tr':
-              newCropBox.width = Math.max(minSize, cropBox.width + deltaX);
-              newCropBox.height = Math.max(minSize, cropBox.height - deltaY);
-              newCropBox.y = cropBox.y + cropBox.height - newCropBox.height;
-              break;
-            case 'bl':
-              newCropBox.width = Math.max(minSize, cropBox.width - deltaX);
-              newCropBox.height = Math.max(minSize, cropBox.height + deltaY);
-              newCropBox.x = cropBox.x + cropBox.width - newCropBox.width;
-              break;
-            case 'br':
-              newCropBox.width = Math.max(minSize, cropBox.width + deltaX);
-              newCropBox.height = Math.max(minSize, cropBox.height + deltaY);
-              break;
-          }
-          
-          // 边界检查
-          if (newCropBox.x >= 0 && newCropBox.y >= 0 && 
-              newCropBox.x + newCropBox.width <= canvasWidth &&
-              newCropBox.y + newCropBox.height <= canvasHeight) {
-            // 直接更新数据
-            this.data.cropBox = newCropBox;
+          if (aspectRatio > 0) {
+            // 固定比例模式
+            let newWidth, newHeight;
             
-            // 只更新遮罩Canvas，不重绘图片
-            this.updateMaskCanvas();
+            switch (this.data.resizeHandle) {
+              case 'tl':
+              case 'br':
+                // 对角线调整，以较大的变化量为准
+                const avgDelta = (Math.abs(deltaX) + Math.abs(deltaY)) / 2;
+                const direction = (this.data.resizeHandle === 'tl') ? -1 : 1;
+                newWidth = Math.max(minSize, cropBox.width + direction * avgDelta);
+                newHeight = newWidth / aspectRatio;
+                break;
+              case 'tr':
+              case 'bl':
+                const avgDelta2 = (Math.abs(deltaX) + Math.abs(deltaY)) / 2;
+                const direction2 = (this.data.resizeHandle === 'bl') ? -1 : 1;
+                newWidth = Math.max(minSize, cropBox.width + direction2 * avgDelta2);
+                newHeight = newWidth / aspectRatio;
+                break;
+            }
+            
+            // 确保最小尺寸
+            if (newHeight < minSize) {
+              newHeight = minSize;
+              newWidth = newHeight * aspectRatio;
+            }
+            
+            // 根据调整方向更新位置
+            switch (this.data.resizeHandle) {
+              case 'tl':
+                newCropBox.x = cropBox.x + (cropBox.width - newWidth);
+                newCropBox.y = cropBox.y + (cropBox.height - newHeight);
+                break;
+              case 'tr':
+                newCropBox.y = cropBox.y + (cropBox.height - newHeight);
+                break;
+              case 'bl':
+                newCropBox.x = cropBox.x + (cropBox.width - newWidth);
+                break;
+              case 'br':
+                // 位置不变
+                break;
+            }
+            
+            newCropBox.width = newWidth;
+            newCropBox.height = newHeight;
+            
+          } else {
+            // 自由裁切模式
+            switch (this.data.resizeHandle) {
+              case 'tl':
+                newCropBox.width = Math.max(minSize, cropBox.width - deltaX);
+                newCropBox.height = Math.max(minSize, cropBox.height - deltaY);
+                newCropBox.x = cropBox.x + cropBox.width - newCropBox.width;
+                newCropBox.y = cropBox.y + cropBox.height - newCropBox.height;
+                break;
+              case 'tr':
+                newCropBox.width = Math.max(minSize, cropBox.width + deltaX);
+                newCropBox.height = Math.max(minSize, cropBox.height - deltaY);
+                newCropBox.y = cropBox.y + cropBox.height - newCropBox.height;
+                break;
+              case 'bl':
+                newCropBox.width = Math.max(minSize, cropBox.width - deltaX);
+                newCropBox.height = Math.max(minSize, cropBox.height + deltaY);
+                newCropBox.x = cropBox.x + cropBox.width - newCropBox.width;
+                break;
+              case 'br':
+                newCropBox.width = Math.max(minSize, cropBox.width + deltaX);
+                newCropBox.height = Math.max(minSize, cropBox.height + deltaY);
+                break;
+            }
           }
+          
+          // 优化边界检查 - 确保裁切框完全在Canvas内
+          // 首先限制尺寸
+          newCropBox.width = Math.max(minSize, Math.min(newCropBox.width, canvasWidth));
+          newCropBox.height = Math.max(minSize, Math.min(newCropBox.height, canvasHeight));
+          
+          // 然后限制位置
+          newCropBox.x = Math.max(0, Math.min(newCropBox.x, canvasWidth - newCropBox.width));
+          newCropBox.y = Math.max(0, Math.min(newCropBox.y, canvasHeight - newCropBox.height));
+          
+          // 在固定比例模式下，如果边界限制导致比例失调，需要重新调整
+          if (aspectRatio > 0) {
+            const currentRatio = newCropBox.width / newCropBox.height;
+            if (Math.abs(currentRatio - aspectRatio) > 0.01) {
+              // 比例失调，以较小的维度为准重新计算
+              if (newCropBox.width / aspectRatio > newCropBox.height) {
+                newCropBox.width = newCropBox.height * aspectRatio;
+              } else {
+                newCropBox.height = newCropBox.width / aspectRatio;
+              }
+              
+              // 重新检查位置
+              newCropBox.x = Math.max(0, Math.min(newCropBox.x, canvasWidth - newCropBox.width));
+              newCropBox.y = Math.max(0, Math.min(newCropBox.y, canvasHeight - newCropBox.height));
+            }
+          }
+          
+          // 直接更新数据
+          this.data.cropBox = newCropBox;
+          
+          // 只更新遮罩Canvas，不重绘图片
+          this.updateMaskCanvas();
         });
       }
     },

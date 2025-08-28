@@ -48,20 +48,56 @@
 }
 
 /* 按钮样式 */
+.btn-group {
+  display: flex;
+  gap: 24rpx;
+  margin-bottom: 32rpx;
+}
+
+.btn-group.ratio-group {
+  justify-content: space-between;
+}
+
+.section-subtitle {
+  font-size: 28rpx;
+  color: #666;
+  margin: 32rpx 0 24rpx 0;
+  text-align: center;
+}
+
 .demo-btn {
-  background: linear-gradient(135deg, #007aff 0%, #0056b3 100%);
-  color: #ffffff;
+  flex: 1;
+  padding: 32rpx 24rpx;
   border: none;
   border-radius: 16rpx;
-  padding: 32rpx 48rpx;
-  font-size: 36rpx;
+  font-size: 28rpx;
   font-weight: 600;
-  margin-bottom: 40rpx;
-  width: 100%;
-  box-shadow: 0 8rpx 24rpx rgba(0, 122, 255, 0.3);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
+}
+
+.demo-btn.primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.demo-btn.secondary {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+}
+
+.demo-btn.ratio-btn {
+  flex: 0 0 30%;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: white;
+  font-size: 24rpx;
+  padding: 24rpx 16rpx;
 }
 
 .demo-btn::before {
@@ -80,9 +116,19 @@
 }
 
 .demo-btn:active {
-  background: linear-gradient(135deg, #0056b3 0%, #003d82 100%);
   transform: translateY(2rpx);
-  box-shadow: 0 4rpx 12rpx rgba(0, 122, 255, 0.4);
+}
+
+.demo-btn.primary:active {
+  box-shadow: 0 4rpx 16rpx rgba(102, 126, 234, 0.4);
+}
+
+.demo-btn.secondary:active {
+  box-shadow: 0 4rpx 16rpx rgba(240, 147, 251, 0.4);
+}
+
+.demo-btn.ratio-btn:active {
+  box-shadow: 0 4rpx 16rpx rgba(79, 172, 254, 0.4);
 }
 
 /* 裁切后图片容器 */

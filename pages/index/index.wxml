@@ -3,7 +3,33 @@
   <!-- 图片裁切组件演示 -->
   <view class="cropper-demo">
     <view class="demo-title">图片裁切组件测试</view>
-    <button class="demo-btn" bindtap="showImageCropper">打开图片裁切</button>
+    
+    <view class="btn-group">
+      <button class="demo-btn primary" bindtap="openCropper">
+        <text class="btn-icon">✂️</text>
+        <text class="btn-text">自由裁切</text>
+      </button>
+      
+      <button class="demo-btn secondary" bindtap="openFullscreenCropper">
+        <text class="btn-icon">🖼️</text>
+        <text class="btn-text">全屏裁切</text>
+      </button>
+    </view>
+    
+    <view class="section-subtitle">固定比例裁切</view>
+    <view class="btn-group ratio-group">
+      <button class="demo-btn ratio-btn" bindtap="openSquareCropper">
+        <text class="btn-text">1:1</text>
+      </button>
+      
+      <button class="demo-btn ratio-btn" bindtap="openClassicCropper">
+        <text class="btn-text">4:3</text>
+      </button>
+      
+      <button class="demo-btn ratio-btn" bindtap="openWideCropper">
+        <text class="btn-text">16:9</text>
+      </button>
+    </view>
     
     <!-- 显示裁切后的图片 -->
     <view class="cropped-image-container" wx:if="{{croppedImage}}">
@@ -18,6 +44,8 @@
   show="{{showCropper}}"
   min-size="{{100}}"
   quality="{{0.8}}"
-  bind:cropped="onImageCropped"
+  aspect-ratio="{{cropperConfig.aspectRatio}}"
+  fullscreen="{{cropperConfig.fullscreen}}"
+  bind:cropped="onCropped"
   bind:cancel="onCropCancel"
 />

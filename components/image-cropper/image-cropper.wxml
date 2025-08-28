@@ -1,6 +1,6 @@
-<view class="image-cropper" wx:if="{{show}}">
-  <view class="cropper-container">
-    <view class="cropper-header">
+<view class="image-cropper {{fullscreen ? 'fullscreen-mode' : ''}}" wx:if="{{show}}">
+  <view class="cropper-container {{fullscreen ? 'fullscreen-container' : ''}}">
+    <view class="cropper-header" wx:if="{{!fullscreen}}">
       <text class="title">裁切图片</text>
     </view>
     
@@ -31,7 +31,7 @@
       </view>
     </view>
     
-    <view class="cropper-footer" wx:if="{{imageSrc}}">
+    <view class="cropper-footer {{fullscreen ? 'fullscreen-footer' : ''}}" wx:if="{{imageSrc}}">
       <button class="btn cancel-btn" bindtap="cancel">取消</button>
       <button class="btn confirm-btn" bindtap="confirmCrop">确认</button>
     </view>
